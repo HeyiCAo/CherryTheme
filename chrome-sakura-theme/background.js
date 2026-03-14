@@ -43,8 +43,12 @@ function getThemeColors(isDay) {
 
 function applyTheme(isDay) {
   const theme = getThemeColors(isDay);
-  chrome.theme.update(theme);
-  console.log(`Theme applied: ${isDay ? 'Day (White)' : 'Night (Klein Blue)'}`);
+  if (chrome.theme && chrome.theme.update) {
+    chrome.theme.update(theme);
+    console.log(`Theme applied: ${isDay ? 'Day (White)' : 'Night (Klein Blue)'}`);
+  } else {
+    console.warn('chrome.theme API is not available');
+  }
 }
 
 // Initial theme application
