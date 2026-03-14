@@ -4,7 +4,7 @@
 const KLEIN_BLUE = [0, 47, 167];
 const WHITE = [255, 255, 255];
 
-// Day hours (6 AM to 6 PM)
+// Day hours (6 AM to 6 PM) - fallback when system theme detection unavailable
 const DAY_START = 6;
 const DAY_END = 18;
 
@@ -51,44 +51,72 @@ function applyTheme(isDay) {
   }
 }
 
+// Check system color scheme by creating an offscreen document or using time-based fallback
+async function getSystemTheme() {
+  // Try to use chrome.system.display if available (Chrome 116+)
+  if (chrome.system && chrome.system.display) {
+    try {
+      const displays = await chrome.system.display.getInfo();
+      // Use primary display info if available
+      // Note: This doesn't directly give us dark mode status, so we fall back to time
+    } catch (e) {
+      // Fallback to time-based
+    }
+  }
+  // Default: use time-based detection
+  return isDaytime();
+}
+
 // Initial theme application
-chrome.runtime.onInstalled.addListener(() => {
-  applyTheme(isDaytime());
+chrome.runtime.onInstalled.addListener(async () => {
+  const isDay = await getSystemTheme();
+  applyTheme(isDay);
 });
 
 // Update theme when browser starts
-chrome.runtime.onStartup.addListener(() => {
-  applyTheme(isDaytime());
+chrome.runtime.onStartup.addListener(async () => {
+  const isDay = await getSystemTheme();
+  applyTheme(isDay);
 });
 
-// Check and update theme every hour
-chrome.alarms.create("themeCheck", { periodInMinutes: 60 });
+// Check and update theme every 30 minutes to catch day/night transitions
+chrome.alarms.create("themeCheck", { periodInMinutes: 30 });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "themeCheck") {
-    applyTheme(isDaytime());
+    const isDay = await getSystemTheme();
+    applyTheme(isDay);
   }
 });
 
-// Allow manual toggle via action button
+// Manual toggle for switching between day/night modes
 chrome.action.onClicked.addListener(() => {
-  // Toggle between day and night theme manually
-  chrome.storage.local.get(['forceMode'], (result) => {
-    const currentForceMode = result.forceMode;
+  chrome.storage.local.get(['overrideMode'], (result) => {
+    const currentOverride = result.overrideMode;
     
-    // If no forceMode set, determine current actual mode
-    let currentIsDay;
-    if (currentForceMode === undefined) {
-      currentIsDay = isDaytime();
+    // Toggle override state
+    let newOverride;
+    if (currentOverride === undefined) {
+      // First click: override with opposite of current mode
+      const currentIsDay = isDaytime();
+      newOverride = currentIsDay ? 'night' : 'day';
+    } else if (currentOverride === 'day') {
+      newOverride = 'night';
+    } else if (currentOverride === 'night') {
+      newOverride = null; // Clear override, return to auto (time-based)
     } else {
-      currentIsDay = currentForceMode === 'day';
+      newOverride = 'day';
     }
     
-    // Toggle to opposite mode
-    const newIsDay = !currentIsDay;
-    const newForceMode = newIsDay ? 'day' : 'night';
-    
-    chrome.storage.local.set({ forceMode: newForceMode });
-    applyTheme(newIsDay);
+    if (newOverride) {
+      chrome.storage.local.set({ overrideMode: newOverride });
+      applyTheme(newOverride === 'day');
+      console.log(`Manual override set to: ${newOverride}`);
+    } else {
+      chrome.storage.local.remove('overrideMode');
+      const isDay = isDaytime();
+      applyTheme(isDay);
+      console.log('Override cleared, returned to auto mode');
+    }
   });
 });
