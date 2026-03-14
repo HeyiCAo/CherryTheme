@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Sakura Pixel Theme",
   "version": "1.0",
-  "description": "Chrome theme with white toolbar during day and Klein blue at night, featuring pixel-style cherry blossoms",
-  "permissions": ["alarms", "storage", "theme"],
+  "description": "Chrome extension with white toolbar during day and Klein blue at night, featuring pixel-style cherry blossoms",
+  "permissions": ["alarms", "storage"],
   "background": {
     "service_worker": "background.js"
   },
