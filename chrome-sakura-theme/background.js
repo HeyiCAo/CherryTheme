@@ -74,17 +74,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.action.onClicked.addListener(() => {
   // Toggle between day and night theme manually
   chrome.storage.local.get(['forceMode'], (result) => {
-    const currentForceMode = result.forceMode || null;
-    const newForceMode = currentForceMode === 'day' ? 'night' : 
-                         currentForceMode === 'night' ? null : 'day';
+    const currentForceMode = result.forceMode;
     
-    if (newForceMode === null) {
-      // Auto mode - based on time
-      chrome.storage.local.remove(['forceMode']);
-      applyTheme(isDaytime());
+    // If no forceMode set, determine current actual mode
+    let currentIsDay;
+    if (currentForceMode === undefined) {
+      currentIsDay = isDaytime();
     } else {
-      chrome.storage.local.set({ forceMode: newForceMode });
-      applyTheme(newForceMode === 'day');
+      currentIsDay = currentForceMode === 'day';
     }
+    
+    // Toggle to opposite mode
+    const newIsDay = !currentIsDay;
+    const newForceMode = newIsDay ? 'day' : 'night';
+    
+    chrome.storage.local.set({ forceMode: newForceMode });
+    applyTheme(newIsDay);
   });
 });
