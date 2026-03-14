@@ -4,14 +4,8 @@
 const KLEIN_BLUE = [0, 47, 167];
 const WHITE = [255, 255, 255];
 
-// Day hours (6 AM to 6 PM) - fallback when system theme detection unavailable
-const DAY_START = 6;
-const DAY_END = 18;
-
-function isDaytime() {
-  const hour = new Date().getHours();
-  return hour >= DAY_START && hour < DAY_END;
-}
+// Cache for current theme state
+let isDayMode = true;
 
 function getThemeColors(isDay) {
   const mainColor = isDay ? WHITE : KLEIN_BLUE;
@@ -42,6 +36,7 @@ function getThemeColors(isDay) {
 }
 
 function applyTheme(isDay) {
+  isDayMode = isDay;
   const theme = getThemeColors(isDay);
   if (chrome.theme && chrome.theme.update) {
     chrome.theme.update(theme);
@@ -51,72 +46,64 @@ function applyTheme(isDay) {
   }
 }
 
-// Check system color scheme by creating an offscreen document or using time-based fallback
-async function getSystemTheme() {
-  // Try to use chrome.system.display if available (Chrome 116+)
-  if (chrome.system && chrome.system.display) {
-    try {
-      const displays = await chrome.system.display.getInfo();
-      // Use primary display info if available
-      // Note: This doesn't directly give us dark mode status, so we fall back to time
-    } catch (e) {
-      // Fallback to time-based
-    }
+// Listen for Chrome theme changes (light/dark mode)
+chrome.management.onEnabled.addListener((info) => {
+  // Check if it's the extension itself being enabled
+  if (info.id === chrome.runtime.id) {
+    checkSystemThemeAndApply();
   }
-  // Default: use time-based detection
-  return isDaytime();
+});
+
+// Use a content script approach to detect system theme via CSS media query
+async function checkSystemThemeAndApply() {
+  try {
+    // Create an offscreen document to check media query
+    if (chrome.offscreen) {
+      // Check if offscreen document already exists
+      const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [chrome.runtime.getURL('offscreen.html')]
+      });
+      
+      if (existingContexts.length === 0) {
+        await chrome.offscreen.createDocument({
+          url: 'offscreen.html',
+          reasons: ['DOM_PARSER'],
+          justification: 'Check system color scheme preference'
+        });
+      }
+      
+      // Send message to offscreen document to check theme
+      chrome.runtime.sendMessage({ type: 'CHECK_THEME' });
+    } else {
+      // Fallback: use time-based detection
+      const hour = new Date().getHours();
+      const isDay = hour >= 6 && hour < 18;
+      applyTheme(isDay);
+    }
+  } catch (e) {
+    console.error('Error checking system theme:', e);
+    // Fallback to time-based
+    const hour = new Date().getHours();
+    const isDay = hour >= 6 && hour < 18;
+    applyTheme(isDay);
+  }
 }
 
+// Listen for messages from offscreen document
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'THEME_RESULT') {
+    applyTheme(message.isDay);
+  }
+  return true;
+});
+
 // Initial theme application
-chrome.runtime.onInstalled.addListener(async () => {
-  const isDay = await getSystemTheme();
-  applyTheme(isDay);
+chrome.runtime.onInstalled.addListener(() => {
+  checkSystemThemeAndApply();
 });
 
 // Update theme when browser starts
-chrome.runtime.onStartup.addListener(async () => {
-  const isDay = await getSystemTheme();
-  applyTheme(isDay);
-});
-
-// Check and update theme every 30 minutes to catch day/night transitions
-chrome.alarms.create("themeCheck", { periodInMinutes: 30 });
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "themeCheck") {
-    const isDay = await getSystemTheme();
-    applyTheme(isDay);
-  }
-});
-
-// Manual toggle for switching between day/night modes
-chrome.action.onClicked.addListener(() => {
-  chrome.storage.local.get(['overrideMode'], (result) => {
-    const currentOverride = result.overrideMode;
-    
-    // Toggle override state
-    let newOverride;
-    if (currentOverride === undefined) {
-      // First click: override with opposite of current mode
-      const currentIsDay = isDaytime();
-      newOverride = currentIsDay ? 'night' : 'day';
-    } else if (currentOverride === 'day') {
-      newOverride = 'night';
-    } else if (currentOverride === 'night') {
-      newOverride = null; // Clear override, return to auto (time-based)
-    } else {
-      newOverride = 'day';
-    }
-    
-    if (newOverride) {
-      chrome.storage.local.set({ overrideMode: newOverride });
-      applyTheme(newOverride === 'day');
-      console.log(`Manual override set to: ${newOverride}`);
-    } else {
-      chrome.storage.local.remove('overrideMode');
-      const isDay = isDaytime();
-      applyTheme(isDay);
-      console.log('Override cleared, returned to auto mode');
-    }
-  });
+chrome.runtime.onStartup.addListener(() => {
+  checkSystemThemeAndApply();
 });

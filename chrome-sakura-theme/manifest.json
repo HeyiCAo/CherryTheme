@@ -2,29 +2,12 @@
   "manifest_version": 3,
   "name": "Sakura Pixel Theme",
   "version": "1.0",
-  "description": "Chrome extension with white toolbar during day and Klein blue at night, featuring pixel-style cherry blossoms",
-  "permissions": ["alarms", "storage"],
-  "host_permissions": ["<all_urls>"],
-  "theme": {
-    "images": {
-      "theme_frame": "sakura_pixel.png"
-    },
-    "colors": {
-      "frame": [255, 255, 255],
-      "toolbar": [255, 255, 255]
-    }
-  },
+  "description": "Chrome extension that follows system light/dark mode with white toolbar in light mode and Klein blue in dark mode, featuring pixel-style cherry blossoms",
+  "permissions": ["offscreen"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Toggle Sakura Theme"
-  },
-  "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S"
-      }
-    }
+    "default_title": "Sakura Theme"
   }
 }

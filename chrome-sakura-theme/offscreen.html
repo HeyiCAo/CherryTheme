@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    @media (prefers-color-scheme: dark) {
+      body { background-color: #000; }
+    }
+    @media (prefers-color-scheme: light) {
+      body { background-color: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'CHECK_THEME') {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        chrome.runtime.sendMessage({ type: 'THEME_RESULT', isDay: !isDark });
+      }
+      return true;
+    });
+
+    // Also listen for changes in system theme
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      chrome.runtime.sendMessage({ type: 'THEME_RESULT', isDay: !e.matches });
+    });
+  </script>
+</body>
+</html>
