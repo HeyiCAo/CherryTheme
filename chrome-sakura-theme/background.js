@@ -1,8 +1,8 @@
 // Klein Blue RGB: [0, 47, 167] or hex #002FA7
-// White RGB: [255, 255, 255]
+// Sky Blue RGB: [135, 206, 235]
 
 const KLEIN_BLUE = [0, 47, 167];
-const WHITE = [255, 255, 255];
+const SKY_BLUE = [135, 206, 235];
 
 // Day hours (6 AM to 6 PM)
 const DAY_START = 6;
@@ -14,7 +14,7 @@ function isDaytime() {
 }
 
 function getThemeColors(isDay) {
-  const mainColor = isDay ? WHITE : KLEIN_BLUE;
+  const mainColor = isDay ? SKY_BLUE : KLEIN_BLUE;
   
   return {
     colors: {
@@ -41,20 +41,48 @@ function getThemeColors(isDay) {
   };
 }
 
-function applyTheme(isDay) {
+function getThemeApi() {
+  if (typeof browser !== 'undefined' && browser.theme) return browser.theme;
+  if (typeof chrome !== 'undefined' && chrome.theme) return chrome.theme;
+  return null;
+}
+
+function applyTheme(isDay, reason) {
   const theme = getThemeColors(isDay);
-  chrome.theme.update(theme);
-  console.log(`Theme applied: ${isDay ? 'Day (White)' : 'Night (Klein Blue)'}`);
+  const themeApi = getThemeApi();
+  if (!themeApi || typeof themeApi.update !== 'function') {
+    console.warn('Theme API not available in this browser.');
+    return;
+  }
+  themeApi.update(theme);
+  console.log(
+    `Theme applied: ${isDay ? 'Day (Sky Blue)' : 'Night (Klein Blue)'}${reason ? ` (${reason})` : ''}`
+  );
+}
+
+function applyThemeFromMode(reason) {
+  chrome.storage.local.get(['forceMode'], (result) => {
+    const currentForceMode = result.forceMode || null;
+    if (currentForceMode === 'day') {
+      applyTheme(true, reason || 'forced day');
+      return;
+    }
+    if (currentForceMode === 'night') {
+      applyTheme(false, reason || 'forced night');
+      return;
+    }
+    applyTheme(isDaytime(), reason || 'auto');
+  });
 }
 
 // Initial theme application
 chrome.runtime.onInstalled.addListener(() => {
-  applyTheme(isDaytime());
+  applyThemeFromMode('install');
 });
 
 // Update theme when browser starts
 chrome.runtime.onStartup.addListener(() => {
-  applyTheme(isDaytime());
+  applyThemeFromMode('startup');
 });
 
 // Check and update theme every hour
@@ -62,7 +90,7 @@ chrome.alarms.create("themeCheck", { periodInMinutes: 60 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "themeCheck") {
-    applyTheme(isDaytime());
+    applyThemeFromMode('alarm');
   }
 });
 
@@ -71,16 +99,17 @@ chrome.action.onClicked.addListener(() => {
   // Toggle between day and night theme manually
   chrome.storage.local.get(['forceMode'], (result) => {
     const currentForceMode = result.forceMode || null;
-    const newForceMode = currentForceMode === 'day' ? 'night' : 
+    const newForceMode = currentForceMode === 'day' ? 'night' :
                          currentForceMode === 'night' ? null : 'day';
-    
+
     if (newForceMode === null) {
       // Auto mode - based on time
       chrome.storage.local.remove(['forceMode']);
-      applyTheme(isDaytime());
-    } else {
-      chrome.storage.local.set({ forceMode: newForceMode });
-      applyTheme(newForceMode === 'day');
+      applyThemeFromMode('toggle auto');
+      return;
     }
+
+    chrome.storage.local.set({ forceMode: newForceMode });
+    applyTheme(newForceMode === 'day', 'toggle forced');
   });
 });
